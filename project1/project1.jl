@@ -145,12 +145,13 @@ function compute(infile, outfile)
     D = transpose(Matrix(data_raw)) # data matrix has column for each set, one line per node (same as in book)
 
     # initialize example graph
-    # G = SimpleDiGraph(length(vars))
-    # add_edge!(G, 1, 2)
-    # add_edge!(G, 3, 4)
-    # add_edge!(G, 5, 6)
-    # add_edge!(G, 1, 4)
-    # add_edge!(G, 5, 4)
+    G = SimpleDiGraph(length(vars))
+    add_edge!(G, 1, 2)
+    add_edge!(G, 3, 4)
+    add_edge!(G, 5, 6)
+    add_edge!(G, 1, 4)
+    add_edge!(G, 5, 4)
+    score = bayesian_score(vars, G, D)
 
     # start with empty graph
     G = SimpleDiGraph(length(vars))
@@ -158,13 +159,14 @@ function compute(infile, outfile)
     order = vars; # use order in csv file for testing
     K2 = K2Search([findfirst(x -> x == v, vars) for v in order]) # create ordering based on order in csv file
     G_K2 = K2_fit(K2, vars, D) # fit graph to data
+    bayesian_score(vars, G_K2, D) |> show # show score of fitted graph
     # test local directed graph search
-    LDGS = LocalDirectedGraphSearch(G, 100) 
-    G_LDGS = LDGS_fit(LDGS, vars, D) # fit graph
-    p = gplot(G_LDGS, nodelabel=vars .|> x -> x.name) # plot graph
+    #LDGS = LocalDirectedGraphSearch(G, 100) 
+    #G_LDGS = LDGS_fit(LDGS, vars, D) # fit graph
+    p = gplot(G_K2, nodelabel=vars .|> x -> x.name) # plot graph
 
     ## output
-    write_gph(G_LDGS, Dict(i => vars[i].name for i in 1:length(vars)), outfile) # write to gph file
+    # write_gph(G_LDGS, Dict(i => vars[i].name for i in 1:length(vars)), outfile) # write to gph file
 end
 
 if length(ARGS) == 2
