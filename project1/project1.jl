@@ -151,6 +151,8 @@ function compute(infile, outfile)
     add_edge!(G, 5, 6)
     add_edge!(G, 1, 4)
     add_edge!(G, 5, 4)
+    show(Dict(i => vars[i].name for i in 1:length(vars)))
+    write_gph(G, Dict(i => vars[i].name for i in 1:length(vars)), outfile)
     score = bayesian_score(vars, G, D)
 
     # start with empty graph
@@ -166,7 +168,7 @@ function compute(infile, outfile)
     p = gplot(G_K2, nodelabel=vars .|> x -> x.name) # plot graph
 
     ## output
-    # write_gph(G_LDGS, Dict(i => vars[i].name for i in 1:length(vars)), outfile) # write to gph file
+    #write_gph(G_LDGS, Dict(i => vars[i].name for i in 1:length(vars)), outfile) # write to gph file
 end
 
 if length(ARGS) == 2
