@@ -8,6 +8,7 @@ using SpecialFunctions
 using Compose, Cairo, Fontconfig
 using Random
 using Distributions
+using Dates
 
 """
     write_gph(G::DiGraph, idx2names, filename)
@@ -82,43 +83,6 @@ function create_pseudocount_matrices(r, G, D)
     return alpha, M
 end
 
-function K2_search_book(order, var_ids, r, D)
-    G = SimpleDiGraph(length(var_ids))
-    score_global = -Inf
-    k = 0
-    for i in order[2:end]
-        print("\n i: ")
-        show(i)
-        print("\n j: ")
-        k += 1
-        score_global = bayesian_score(r, G, D)
-        while true
-            score_best_iter = -Inf
-            j_best = 0
-            for j in order[1:k]
-                if !has_edge(G, j, i)
-                    add_edge!(G, j, i)
-                    score_iter = bayesian_score(r, G, D)
-                    if score_iter > score_best_iter
-                        j_best = j
-                        score_best_iter = score_iter
-                    end
-                    rem_edge!(G, j, i)
-                end
-            end
-            if score_best_iter > score_global
-                score_global = score_best_iter
-                add_edge!(G, j_best, i)
-                show(j_best)
-                print(", ")
-            else 
-                break
-            end
-        end
-    end
-    return G, score_global
-end
-
 function K2_search(order,max_par,var_ids,r,D)
     n = length(order)
     G = SimpleDiGraph(length(var_ids))
@@ -177,70 +141,6 @@ function K2_order(n_order, max_par, seed, var_ids, r, D)
     return G_best, best_score, best_order
 end
 
-# add random edge
-function add_rand_edge(G)
-    i,j = rand(1:nv(G)), rand(1:nv(G))
-    while j == i
-        j = rand(1:nv(G))
-    end
-    if !has_edge(G,i,j)
-        add_edge!(G,i,j)
-    end
-    return G
-end
-
-# remove random edge
-function rem_rand_edge(G)
-    i,j = rand(1:nv(G)), rand(1:nv(G))
-    while j == i
-        j = rand(1:nv(G))
-    end
-    if has_edge(G,i,j)
-        rem_edge!(G,i,j)
-    end
-    return G
-end
-
-# invert random edge
-function inv_rand_edge(G)
-    i,j = rand(1:nv(G)), rand(1:nv(G))
-    while j == i
-        j = rand(1:nv(G))
-    end
-    if has_edge(G,i,j)
-        rem_edge!(G,i,j)
-        add_edge!(G,j,i)
-    elseif has_edge(G,j,i)
-        rem_edge!(G,j,i)
-        add_edge!(G,i,j)
-    end
-    return G
-end
-
-function Dirichlet_rand_search(var_ids,r,D)
-    prior = [5, 1]
-    max_runs = 500
-    # create a dirichlet distribution favoring options 1 and 2 slightly
-    dist = Dirichlet(prior)
-    G = SimpleDiGraph(length(var_ids))
-    score = bayesian_score(r,G,D)
-    for i = 1:max_runs
-        p = rand(dist)
-        i_op = argmax(p)
-        if i_op == 1
-            G_new = add_rand_edge(G)
-        elseif i_op == 2
-            G_new = rem_rand_edge(G)
-        end
-        score_new = bayesian_score(r,G_new,D)
-        if (score_new > score) && is_cyclic(G_new) == false
-            score = score_new
-            G = G_new
-        end
-    end
-    return G, score
-end
-
 function compute(infile, outfile)
     ## GET DATA 
     # read in csv file
@@ -252,27 +152,49 @@ function compute(infile, outfile)
     D = transpose(Matrix(data_raw)) # data matrix has column for each set, one line per node (same as in book)
 
     ## RUN ALGORITHMS
+    start_time = time()
     alg = "K2_order"
-    if alg == "K2_book"
-        order = var_ids
-        G, score = K2_search_book(order,var_ids,r,D)
-    elseif alg == "K2"
-        order = var_ids
-        max_par = 3
-        G, score = K2_search(order,max_par,var_ids,r,D)
-    elseif alg == "K2_order"
-        n_order = 1    # number of different random orderings
-        max_par = 5     # maximum number of parents
+    if alg == "K2_order"
+        if dataset == "small"
+            n_order = 1000    # number of different random orderings
+            max_par = length(var_names)-1     # maximum number of parents
+        elseif dataset == "medium"
+            n_order = 20
+            max_par = length(var_names)-1
+        elseif dataset == "large"
+            n_order = 5
+            max_par = length(var_names)-1
+        end
         seed = 43
         G, score, order = K2_order(n_order,max_par,seed,var_ids,r,D)
-    elseif alg == "Dirichlet"
-        G, score = Dirichlet_rand_search(var_ids,r,D)
     end
-    
-    ## OUTPUT
-    print("\n")
-    show(score)
-    print("\n")
+
+    ## Format output
+    # txt report file
+    report_file = "project1/output/"*dataset*".txt"
+    runtime = time() - start_time
+    current_dt = Dates.format(Dates.now(), "yyyy-mm-dd HH:MM:SS")
+    open(report_file, "w") do f
+        println(f, "=====================================")
+        println(f, "Report File")
+        println(f, "=====================================")
+        println(f, "Dataset: " * dataset)
+        println(f, "Date: " * current_dt)
+        println(f, "Algorithm: " * alg)
+        if alg == K2_order
+            println(f, "Number of Orderings Tried: " * string(n_order))
+            println(f, "Seed for MersenneTwister Random: " * string(seed))
+        end
+        println(f, "Ordering: " * string(order))
+        println(f, "Maximum Number of Parents: " * string(max_par))
+        println(f, "Score: " * string(score))
+        println(f, "Runtime [s]: " * string(runtime))
+        println(f, "=====================================")
+    end
+    # show report
+    read(report_file, String) |> println
+
+    # Plot and graph gph
     p = gplot(G, nodelabel=var_names) # plot graph
     # Save using Compose
     draw(PDF("project1/output/"*dataset*".pdf", 16cm, 16cm), p)
@@ -283,9 +205,9 @@ if length(ARGS) == 2
     inputfilename = ARGS[1]
     outputfilename = ARGS[2]
 else
-    dataset = "large";
+    dataset = "small";
     inputfilename = "project1/data/" * dataset * ".csv"
     outputfilename = "project1/output/" * dataset * ".gph"
 end
 
-@time compute(inputfilename, outputfilename)
+compute(inputfilename, outputfilename)
